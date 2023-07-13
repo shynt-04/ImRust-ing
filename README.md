@@ -1,3 +1,3 @@
 # ImRust-ing
 
-Just start coding in Rust
+Just start coding in Rust...
