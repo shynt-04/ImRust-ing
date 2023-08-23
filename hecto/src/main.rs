@@ -1,5 +1,8 @@
 mod editor;
 mod terminal;
+mod document;
+mod row;
+
 
 use editor::Editor;
 
