@@ -1,6 +1,6 @@
 # ImRust-ing
 
-Just start coding in Rust...
+Rust...
 
 [Rust By Practice](https://practice.rs/why-exercise.html)
 
