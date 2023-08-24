@@ -4,8 +4,8 @@ use termion::color;
 use std::time::{Duration, Instant};
 use std::env;
 
-const STATUS_FG_COLOR: color::Rgb = color::Rgb(63, 63, 63);
-const STATUS_BG_COLOR: color::Rgb = color::Rgb(239, 239, 239);
+const STATUS_FG_COLOR: color::Rgb = color::Rgb(224,255,255);
+const STATUS_BG_COLOR: color::Rgb = color::Rgb(139, 0, 139);
 
 #[derive(Default)]
 pub struct Position {
@@ -77,6 +77,17 @@ impl Editor {
         let pressed_key = Terminal::read_key()?;
         match pressed_key {
             Key::Ctrl('q') => self.quit_sign = true,
+            Key::Char(c) => {
+                self.document.insert(&self.cursor_position, c);
+                self.move_cursor(Key::Right);
+            },
+            Key::Delete => self.document.delete(&self.cursor_position),
+            Key::Backspace => {
+                if self.cursor_position.x > 0 || self.cursor_position.y > 0 {
+                    self.move_cursor(Key::Left);
+                    self.document.delete(&self.cursor_position);
+                }
+            },
             Key::Up |
             Key::Down |
             Key::Left |

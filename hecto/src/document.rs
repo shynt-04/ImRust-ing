@@ -1,4 +1,5 @@
 use crate::row::Row;
+use crate::editor::Position;
 use std::fs;
 
 #[derive(Default)]
@@ -30,5 +31,25 @@ impl Document {
 
     pub fn len(&self) -> usize {
         self.rows.len()
+    }
+
+    pub fn insert(&mut self, at: &Position, c: char) {
+        if at.y == self.len() { // end of file
+            // add new line
+            let mut row = Row::default();
+            row.insert(0, c);
+            self.rows.push(row);
+        } else if at.y < self.len() { // add to current line
+            let row = self.rows.get_mut(at.y).unwrap();
+            row.insert(at.x, c);
+        }
+    }
+
+    pub fn delete(&mut self, at: &Position) {
+        if at.y >= self.len() {
+            return;
+        }
+        let row = self.rows.get_mut(at.y).unwrap();
+        row.delete(at.x);
     }
 }
