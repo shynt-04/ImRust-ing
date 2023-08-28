@@ -31,6 +31,7 @@ pub struct Editor {
     offset: Position,
     document: Document,
     status_message: StatusMessage,
+    confirm_quit: bool, // Check unsaved changes
 }
 
 impl Editor {
@@ -56,6 +57,7 @@ impl Editor {
             offset: Position::default(),
             document,
             status_message: StatusMessage::from(init_status),
+            confirm_quit: false,
         }
     }
     
@@ -93,7 +95,14 @@ impl Editor {
     fn process_keypress(&mut self) -> Result<(), std::io::Error> {
         let pressed_key = Terminal::read_key()?;
         match pressed_key {
-            Key::Ctrl('q') => self.quit_sign = true,
+            Key::Ctrl('q') => {
+                if self.confirm_quit == false && self.document.is_dirty() {
+                    self.status_message = StatusMessage::from("File has unsaved changes. Press Ctrl-Q to confirm quit".to_string());
+                    self.confirm_quit = true;
+                    return Ok(());
+                }
+                self.quit_sign = true;
+            },
             Key::Ctrl('s') => self.save(),
             Key::Char(c) => {
                 self.document.insert(&self.cursor_position, c);
@@ -178,7 +187,7 @@ impl Editor {
             },
             Key::PageUp => {
                 y = if y > terminal_height {
-                    y - terminal_height
+                    y.saturating_sub(terminal_height)
                 } else {
                     0
                 }
@@ -228,7 +237,7 @@ impl Editor {
     fn draw_row(&self, row: &Row) {
         let width = self.terminal.size().width as usize;
         let start: usize = self.offset.x;
-        let end = start + width;
+        let end = start.saturating_add(width);
         let row = row.render(start, end);
         println!("{}\r", row);
     }
@@ -236,7 +245,7 @@ impl Editor {
     fn draw_rows(&self) {
         for terminal_row in 0..self.terminal.size().height  {
             Terminal::clear_current_line();
-            if let Some(row) = self.document.row(terminal_row as usize + self.offset.y) {
+            if let Some(row) = self.document.row(self.offset.y.saturating_add(terminal_row as usize)) {
                 self.draw_row(row);
             } else {
                 println!("~\r");
@@ -247,26 +256,29 @@ impl Editor {
     fn draw_status_bar(&self) {
         let mut status;
         let width = self.terminal.size().width as usize;
+        let modified_indicator = if self.document.is_dirty() {
+            "(modified)"
+        } else {
+            ""
+        };
         let mut filename = "[No name]".to_string();
         if let Some(name) = &self.document.file_name {
             filename = name.clone();
             filename.truncate(20);
         }
-        status = format!("{} - {} lines", filename, self.document.len());
+        status = format!("{} - {} lines {}", filename, self.document.len(), modified_indicator);
         let line_indicator = format!(
             "{}/{}",
             self.cursor_position.y.saturating_add(1),
             self.document.len()
         );
         let len = line_indicator.len() + status.len();
-        if len < width {
-            status.push_str(&" ".repeat(width - len));
-        }
+        status.push_str(&" ".repeat(width.saturating_sub(len)));
         status = format!("{}{}", status, line_indicator);
         status.truncate(width);
         Terminal::set_bg_color(STATUS_BG_COLOR);
         Terminal::set_fg_color(STATUS_FG_COLOR);
-        print!("{}\r", status);
+        println!("{}\r", status);
         Terminal::reset_fg_color();
         Terminal::reset_bg_color();
     }
@@ -289,7 +301,7 @@ impl Editor {
             match Terminal::read_key()? {
                 Key::Backspace => {
                     if !result.is_empty() {
-                        result.truncate(result.len() - 1);
+                        result.truncate(result.len().saturating_sub(1));
                     }
                 }
                 Key::Char('\n') => break,
