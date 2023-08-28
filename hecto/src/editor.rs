@@ -161,7 +161,7 @@ impl Editor {
                 y = y.saturating_sub(1)
             },
             Key::Down => {
-                if y < height {
+                if y + 1 < height {
                     y = y.saturating_add(1)
                 }
             },
@@ -269,7 +269,7 @@ impl Editor {
         status = format!("{} - {} lines {}", filename, self.document.len(), modified_indicator);
         let line_indicator = format!(
             "{}/{}",
-            self.cursor_position.y.saturating_add(1),
+            std::cmp::min(self.cursor_position.y.saturating_add(1), self.document.len()),
             self.document.len()
         );
         let len = line_indicator.len() + status.len();
