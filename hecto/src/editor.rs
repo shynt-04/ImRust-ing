@@ -7,10 +7,16 @@ use std::env;
 const STATUS_FG_COLOR: color::Rgb = color::Rgb(224,255,255);
 const STATUS_BG_COLOR: color::Rgb = color::Rgb(139, 0, 139);
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Position {
     pub x: usize,
     pub y: usize,
+}
+
+#[derive(PartialEq, Copy, Clone)]
+pub enum SearchDirection {
+    Forward,
+    Backward,
 }
 
 struct StatusMessage {
@@ -37,7 +43,7 @@ pub struct Editor {
 impl Editor {
     pub fn init() -> Self {
         let args: Vec<String> = env::args().collect();
-        let mut init_status = String::from("Command: CTRL-Q = quit | CTRL-S = save");
+        let mut init_status = String::from("Command: CTRL-Q <Quit> | CTRL-S <Save> | CTRL-F <Find>");
         let document = if args.len() > 1 {
             let file_name = &args[1];
             let doc = Document::open(&file_name);
@@ -77,7 +83,7 @@ impl Editor {
 
     fn save(&mut self) {
         if self.document.file_name.is_none() {
-            let new_name = self.prompt("Save as: ").unwrap_or(None);
+            let new_name = self.prompt("Save as: ", |_, _, _|{}).unwrap_or(None);
             if new_name.is_none() {
                 self.status_message = StatusMessage::from("Save aborted".to_string());
                 return;
@@ -89,6 +95,39 @@ impl Editor {
             self.status_message = StatusMessage::from("File saved".to_string());
         } else {
             self.status_message = StatusMessage::from("An error has occurred while saving".to_string());
+        }
+    }
+
+    fn search(&mut self) {
+        let old_position = self.cursor_position.clone();
+        let mut direction = SearchDirection::Forward;
+        // Closures
+        let query = self
+                .prompt("Search (ESC <cancel> | Arrows <navigate>): ",
+                    |editor, key, query: &String|{
+                    let mut moved = false;
+                    match key {
+                        Key::Right | Key::Down => {
+                            direction = SearchDirection::Forward;
+                            editor.move_cursor(Key::Right);
+                            moved = true;
+                        },
+                        Key::Left | Key::Up => {
+                            direction = SearchDirection::Backward;
+
+                        },
+                        _ => direction = SearchDirection::Forward,
+                    }
+                    if let Some(position) = editor.document.find(&query, &editor.cursor_position, direction) {
+                        editor.cursor_position = position;
+                        editor.scroll();
+                    } else if moved {
+                        editor.move_cursor(Key::Left);
+                    }
+                }).unwrap_or(None);
+        if query.is_none() {
+            self.cursor_position = old_position;
+            self.scroll();
         }
     }
 
@@ -104,6 +143,7 @@ impl Editor {
                 self.quit_sign = true;
             },
             Key::Ctrl('s') => self.save(),
+            Key::Ctrl('f') => self.search(),
             Key::Char(c) => {
                 self.document.insert(&self.cursor_position, c);
                 self.move_cursor(Key::Right);
@@ -293,22 +333,24 @@ impl Editor {
         }
     }
 
-    fn prompt(&mut self, prompt: &str) -> Result<Option<String>, std::io::Error> {
+    // displays a prompt in the status bar, and lets the user input a line of text after the prompt
+    fn prompt<C>(&mut self, prompt: &str, mut callback: C) -> Result<Option<String>, std::io::Error> 
+        where C: FnMut(&mut Self, Key, &String)
+    {
         let mut result = String::new();
         loop {
             self.status_message = StatusMessage::from(format!("{}{}", prompt, result));
             self.refresh_screen()?;
-            match Terminal::read_key()? {
+            let key = Terminal::read_key()?;
+            match key {
                 Key::Backspace => {
                     if !result.is_empty() {
                         result.truncate(result.len().saturating_sub(1));
                     }
                 }
                 Key::Char('\n') => break,
-                Key::Ctrl(c) => {
-                    if c.is_control() {
-                        result.push(c);
-                    }
+                Key::Char(c) => {
+                    result.push(c);
                 }
                 Key::Esc => {
                     result.truncate(0);
@@ -316,6 +358,7 @@ impl Editor {
                 }
                 _ => ()
             }
+            callback(self, key, &result);
         }
         self.status_message = StatusMessage::from(String::new());
         if result.is_empty() {

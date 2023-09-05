@@ -1,6 +1,6 @@
 use crate::row::Row;
-use crate::editor::Position;
-use std::fs;
+use crate::editor::{Position, SearchDirection};
+use std::fs::{self};
 use std::io::{Error, Write};
 
 #[derive(Default)]
@@ -92,7 +92,7 @@ impl Document {
                 file.write_all(row.as_bytes())?;
                 file.write_all(b"\n")?;
             }
-            self.dirty = true;
+            self.dirty = false;
         }
         Ok(())
     }
@@ -100,4 +100,42 @@ impl Document {
     pub fn is_dirty(&self) -> bool {
         self.dirty
     }
+
+    pub fn find(&self, query: &str, at: &Position, direction: SearchDirection) -> Option<Position> {
+        if at.y >= self.rows.len() {
+            return None;
+        }
+        let mut position = Position {x: at.x, y: at. y};
+        let start = if direction == SearchDirection::Forward {
+            at.y
+        } else {
+            0
+        };
+        let end = if direction == SearchDirection::Backward {
+            self.rows.len()
+        } else {
+            at.y.saturating_add(1)
+        };
+
+        for _ in start..end {
+            if let Some(row) = self.rows.get(position.y) {
+                if let Some(x) = row.find(query, position.x, direction) {
+                    position.x = x;
+                    return Some(position);
+                }
+                if direction == SearchDirection::Forward {
+                    position.y = position.y.saturating_add(1);
+                    position.x = 0;
+                } else {
+                    position.y = position.y.saturating_sub(1);
+                    position.x = self.rows[position.y].len();
+                }
+            } else {
+                return None;
+            }
+        }
+        None
+    }
+
+
 }
