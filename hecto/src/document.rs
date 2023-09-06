@@ -15,7 +15,9 @@ impl Document {
         let file_content = fs::read_to_string(filename)?;
         let mut rows = Vec::new();
         for content in file_content.lines() {
-            rows.push(Row::from(content));
+            let mut row = Row::from(content);
+            row.highlight();
+            rows.push(row);
         }
         Ok(Self { 
             rows, 
@@ -44,7 +46,10 @@ impl Document {
             self.rows.push(Row::default());
             return;
         }
-        let new_row = self.rows[at.y].split(at.x);
+        let current_row = &mut self.rows[at.y];
+        let mut new_row = current_row.split(at.x);
+        current_row.highlight();
+        new_row.highlight();
         self.rows.insert(at.y + 1, new_row);
     }
 
@@ -62,10 +67,12 @@ impl Document {
             // add new line
             let mut row = Row::default();
             row.insert(0, c);
+            row.highlight();
             self.rows.push(row);
         } else  { // add to current line
             let row = &mut self.rows[at.y];
             row.insert(at.x, c);
+            row.highlight();
         }
     }
 
@@ -79,9 +86,11 @@ impl Document {
             let next_row = self.rows.remove(at.y + 1);
             let row = &mut self.rows[at.y];
             row.append(&next_row);
+            row.highlight();
         } else {
             let row = &mut self.rows[at.y];
             row.delete(at.x);
+            row.highlight();
         }
     }
 
@@ -106,15 +115,10 @@ impl Document {
             return None;
         }
         let mut position = Position {x: at.x, y: at. y};
-        let start = if direction == SearchDirection::Forward {
-            at.y
+        let (start, end) = if direction == SearchDirection::Forward {
+            (at.y, self.rows.len())
         } else {
-            0
-        };
-        let end = if direction == SearchDirection::Backward {
-            self.rows.len()
-        } else {
-            at.y.saturating_add(1)
+            (0, at.y.saturating_add(1))
         };
 
         for _ in start..end {
